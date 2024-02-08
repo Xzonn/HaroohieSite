@@ -9,6 +9,10 @@ on:
   push:
     branches: ["master"]
 
+  # Runs on pull requests to the default branch
+  pull_request:
+    branches: ["master"]
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -36,13 +40,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Setup python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.12
+          python-version: '3.12'
       - name: Install OpenCC
         run: pip install opencc
       - name: Create zh-Hant files
@@ -53,12 +57,12 @@ jobs:
         id: detect-package-manager
         run: |
           if [ -f "${{ github.workspace }}/yarn.lock" ]; then
-            echo "::set-output name=manager::yarn"
-            echo "::set-output name=command::install"
+            echo "manager=yarn" >> $GITHUB_OUTPUT
+            echo "command=install" >> $GITHUB_OUTPUT
             exit 0
           elif [ -f "${{ github.workspace }}/package.json" ]; then
-            echo "::set-output name=manager::npm"
-            echo "::set-output name=command::ci"
+            echo "manager=npm" >> $GITHUB_OUTPUT
+            echo "command=ci" >> $GITHUB_OUTPUT
             exit 0
           else
             echo "Unable to determine packager manager"
@@ -67,21 +71,26 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: "16"
+          node-version: ${{ matrix.node }}
           cache: ${{ steps.detect-package-manager.outputs.manager }}
       - name: Setup Pages
-        uses: actions/configure-pages@v2
+        id: setup-pages
+        uses: actions/configure-pages@v4
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       - name: Static HTML export with Nuxt
         run: ${{ steps.detect-package-manager.outputs.manager }} run generate
+        env:
+          NUXT_APP_BASE_URL: ${{ steps.setup-pages.outputs.base_path }}
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./.output/public
 
   # Deployment job
   deploy:
+    # Deploy only for push events to the master branch
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -90,4 +99,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
